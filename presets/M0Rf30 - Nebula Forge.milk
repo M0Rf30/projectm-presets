@@ -229,9 +229,9 @@ shapecode_3_border_g=0
 shapecode_3_border_b=0
 shapecode_3_border_a=0
 shape_3_per_frame1=
-per_frame_1=dt = 1/max(fps,15);
-per_frame_2=hit = max(0, bass - 1.12*bass_att - 0.03);
-per_frame_3=kick = max(kick*pow(0.86, 60*dt), min(1, hit*3));
+per_frame_1=dt = min(max(time-tl,0.004),0.1); tl = time; bm = bm + (bass-bm)*(1-exp(-dt/0.8)); bd = bd + (abs(bass-bm)-bd)*(1-exp(-dt/2.5));
+per_frame_2=hit = min(max(((bass-bm)/max(bd,0.1) - 0.8)/1.5, 0), 1);
+per_frame_3=kick = max(kick*pow(0.86, 60*dt), hit);
 per_frame_4=trig = above(kick, 0.55)*above(time, tb+0.3);
 per_frame_5=tb = trig*time + (1-trig)*tb;
 per_frame_6=ringt = trig*0 + (1-trig)*(ringt+dt);

@@ -80,13 +80,13 @@ shapecode_0_enabled=0
 shapecode_1_enabled=0
 shapecode_2_enabled=0
 shapecode_3_enabled=0
-per_frame_init_1=env=0; senv=0; cacc=0; tacc=0; ts=0; bs=0;
-per_frame_1=dt = 1/max(fps,5);
-per_frame_2=kick = max(bass - bass_att*0.92, 0);
-per_frame_3=env = max(env*pow(0.88, dt*60), min(kick*1.4, 1.3));
+per_frame_init_1=env=0; senv=0; cacc=0; tacc=0; ts=0; bs=0; bm=1; bd=0.3; tl=0;
+per_frame_1=dt = min(max(time-tl,0.004),0.1); tl = time; bm = bm + (bass-bm)*(1-exp(-dt/0.8)); bd = bd + (abs(bass-bm)-bd)*(1-exp(-dt/2.5));
+per_frame_2=kick = min(max(((bass-bm)/max(bd,0.1) - 0.8)/1.5, 0), 1);
+per_frame_3=env = max(env*pow(0.88, dt*60), kick*1.3);
 per_frame_4=senv = senv + (env - senv)*(1 - pow(0.80, dt*60));
-per_frame_5=bs = bs*0.96 + bass_att*0.04;
-per_frame_6=ts = ts*0.86 + treb_att*0.14;
+per_frame_5=bs = bs + (bass_att - bs)*(1-pow(0.96,dt*60));
+per_frame_6=ts = ts + (treb_att - ts)*(1-pow(0.86,dt*60));
 per_frame_7=cacc = cacc + dt*(0.30 + 0.12*bs);
 per_frame_8=tacc = tacc + dt*(0.55 + 1.5*ts);
 per_frame_9=q1 = min(senv,1.2);
@@ -193,7 +193,7 @@ comp_54=`  float3 sky = skyg(sk, tod);
 comp_55=`  float2 sunp = float2(-0.34, h0 + 0.082 + 0.010 * sin(time * 0.3));
 comp_56=`  float2 ds = p - sunp;
 comp_57=`  float d = length(ds);
-comp_58=`  float R = 0.080 * (1.0 + 0.05 * q5 + 0.07 * kick);
+comp_58=`  float R = 0.080 * (1.0 + 0.05 * q5 + 0.10 * kick);
 comp_59=`  float glow1 = exp(-d * 4.2);
 comp_60=`  float glow2 = exp(-d * 15.0);
 comp_61=`
@@ -208,7 +208,7 @@ comp_69=`  float3 ccol = lerp(cshade, clit, saturate(rim * 1.3 + glow1 * 0.45));
 comp_70=`  sky = lerp(sky, ccol, saturate(c * 0.80));
 comp_71=`
 comp_72=`  float rays = 0.5 + 0.5 * sin(atan2(ds.y, ds.x) * 9.0 + time * 0.07 + 2.0 * sin(atan2(ds.y, ds.x) * 3.0));
-comp_73=`  sky += float3(1.0, 0.62, 0.28) * glow1 * (0.42 + 0.22 * rays * smoothstep(0.0, 0.5, ds.y + 0.2)) * (1.0 + 0.30 * kick);
+comp_73=`  sky += float3(1.0, 0.62, 0.28) * glow1 * (0.42 + 0.22 * rays * smoothstep(0.0, 0.5, ds.y + 0.2)) * (1.0 + 0.50 * kick);
 comp_74=`  sky += float3(1.0, 0.82, 0.55) * glow2 * 0.45;
 comp_75=`  float disc = smoothstep(R, R * 0.86, d);
 comp_76=`  float3 sunc = lerp(float3(1.0, 0.94, 0.74), float3(1.0, 0.62, 0.30), pow(saturate(d / R), 2.0));
@@ -254,7 +254,7 @@ comp_115=`  float dxs = p.x - sunp.x + wob;
 comp_116=`  float w = 0.022 + dvv * 0.55;
 comp_117=`  float m = exp(-pow(dxs / w, 2.0));
 comp_118=`  float f = exp(-dvv * 1.3);
-comp_119=`  sea += float3(1.0, 0.55, 0.24) * m * 0.34 * f * (1.0 + 0.45 * kick);
+comp_119=`  sea += float3(1.0, 0.55, 0.24) * m * 0.34 * f * (1.0 + 0.70 * kick);
 comp_120=`
 comp_121=`  // reflected volcano
 comp_122=`  float rh = ves(p.x + 0.012 * sin(dvv * 95.0 + q3 * 1.7) * (0.3 + dvv * 4.0)) * 0.80;
@@ -266,13 +266,13 @@ comp_127=`  float g0 = data.g;
 comp_128=`  float g1 = tex2D(sampler_main, uv + float2(0.0045, 0.0)).g + tex2D(sampler_main, uv - float2(0.0045, 0.0)).g;
 comp_129=`  float gl = g0 * 0.7 + g1 * 0.25;
 comp_130=`  float gmask = m * f * 1.15 + 0.12 * f * smoothstep(0.0, 0.03, dvv);
-comp_131=`  sea += float3(1.0, 0.82, 0.50) * pow(gl, 0.85) * gmask * (1.05 + 1.2 * q4 + 0.4 * kick);
+comp_131=`  sea += float3(1.0, 0.82, 0.50) * pow(gl, 0.85) * gmask * (1.05 + 1.2 * q4 + 0.6 * kick);
 comp_132=`
 comp_133=`  // ---------------- compose ----------------
 comp_134=`  float skm = smoothstep(-0.0015, 0.0015, v - h0);
 comp_135=`  float3 col = lerp(sea, sky, skm);
 comp_136=`  // vesuvius body may extend over the horizon line only via vm already; sea above is masked
-comp_137=`  col += float3(1.0, 0.70, 0.40) * exp(-abs(dv) * 50.0) * 0.16 * (1.0 + 0.5 * kick);
+comp_137=`  col += float3(1.0, 0.70, 0.40) * exp(-abs(dv) * 50.0) * 0.16 * (1.0 + 0.7 * kick);
 comp_138=`
 comp_139=`  // foreground headland (bottom right)
 comp_140=`  float hx = saturate((p.x - 0.22) / 0.67);

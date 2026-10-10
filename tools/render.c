@@ -1,4 +1,4 @@
-// Headless projectM renderer: EGL pbuffer + synthetic 128bpm music.
+// Headless projectM renderer: EGL pbuffer + synthetic 128bpm music (or real audio, see below).
 // usage: render preset.milk W H FRAMES  > raw rgb24 frames on stdout
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -94,9 +94,59 @@ void glDrawElements(GLenum m, GLsizei c, GLenum t, const void *i) {
                 p4[0], p4[1], p4[2], p4[3], vp[2], vp[3], bl, dt, cf); }
 }
 
+// ---- audio source -------------------------------------------------------
+// Default: synthetic 128bpm track (backward compatible).
+// AUDIO=/path/file.f32   raw f32le stereo 44.1kHz (e.g. ffmpeg -f f32le -ac 2 -ar 44100)
+// AUDIO_START=<sec>      offset into that file
+// FPS=<n>                pacing + projectm_set_fps + samples per frame (default 60)
+// MESH=default           don't call projectm_set_mesh_size (default 96x72)
+// FEED=full|aulos_old|last576
+//     full      (default) every sample since the previous frame (chunked)
+//     aulos_old only the most recent 240 stereo frames per render frame
+//               (what Aulos fed before the fix: pcm_get_max_samples()=480 f32)
+//     last576   only the most recent 576 stereo frames (= projectM's analysis window)
+// GAIN=<x>               linear gain applied to the audio (loudness tests)
+// FRAMEFILE=path         write 1 line/frame "idx wall_time_s" (pacing diagnostics)
+#define SR 44100
+static float *audio = NULL; static long audio_frames = 0;
+static void synth(float *out, long t0, int n) {
+    static unsigned rng = 1;  // sequential LCG, exactly as the original renderer
+    double beat = 60.0 / 128.0;
+    for (int i = 0; i < n; i++) {
+        long t = t0 + i;
+        double ts = (double)t / SR, bp = fmod(ts, beat), hp = fmod(ts + beat / 2, beat);
+        double bar = fmod(ts, beat * 16);
+        double kick = sin(2 * M_PI * (50 + 120 * exp(-bp * 30)) * bp) * exp(-bp * 8);
+        rng = rng * 1103515245 + 12345;
+        double hat = ((rng >> 16) / 32768.0 - 1) * exp(-hp * 40) * 0.3;
+        double root = bar < beat * 8 ? 110 : 98;
+        double pad = 0.15 * (sin(2 * M_PI * root * ts) + sin(2 * M_PI * root * 1.5 * ts) +
+                             sin(2 * M_PI * root * 2.52 * ts) * (0.5 + 0.5 * sin(ts * 0.7)));
+        double lead = 0.12 * sin(2 * M_PI * root * 4 * (1 + 0.25 * (((int)(ts / beat * 2)) % 4 == 3)) * ts)
+                      * exp(-fmod(ts, beat / 2) * 6);
+        double v = 0.6 * kick + hat + pad + lead;
+        out[i * 2] = (float)(v + 0.05 * sin(ts * 3)); out[i * 2 + 1] = (float)v;
+    }
+}
+
 int main(int argc, char **argv) {
-    if (argc < 5) { fprintf(stderr, "usage\n"); return 1; }
+    if (argc < 5) { fprintf(stderr, "usage: render preset.milk W H FRAMES  (env: AUDIO AUDIO_START FPS MESH FEED GAIN FRAMEFILE)\n"); return 1; }
     int W = atoi(argv[2]), H = atoi(argv[3]), N = atoi(argv[4]);
+    int FPS = getenv("FPS") ? atoi(getenv("FPS")) : 60;
+    if (FPS < 1) FPS = 60;
+    const char *feed = getenv("FEED") ? getenv("FEED") : "full";
+    double gain = getenv("GAIN") ? atof(getenv("GAIN")) : 1.0;
+    long a_off = getenv("AUDIO_START") ? (long)(atof(getenv("AUDIO_START")) * SR) : 0;
+    if (getenv("AUDIO")) {
+        FILE *af = fopen(getenv("AUDIO"), "rb");
+        if (!af) { perror("AUDIO"); return 1; }
+        fseek(af, 0, SEEK_END); long sz = ftell(af); fseek(af, 0, SEEK_SET);
+        audio_frames = sz / (2 * sizeof(float));
+        audio = malloc(audio_frames * 2 * sizeof(float));
+        if (fread(audio, 2 * sizeof(float), audio_frames, af) != (size_t)audio_frames) { fprintf(stderr, "short read\n"); return 1; }
+        fclose(af);
+    }
+    FILE *ff = getenv("FRAMEFILE") ? fopen(getenv("FRAMEFILE"), "w") : NULL;
     EGLDisplay d = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     eglInitialize(d, 0, 0);
     EGLint ca[] = {EGL_SURFACE_TYPE, EGL_PBUFFER_BIT, EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
@@ -115,38 +165,42 @@ int main(int argc, char **argv) {
     if (!pm) { fprintf(stderr, "pm fail\n"); return 1; }
     projectm_set_preset_switch_failed_event_callback(pm, onfail, 0);
     projectm_set_window_size(pm, W, H);
-    projectm_set_mesh_size(pm, 96, 72);
-    projectm_set_fps(pm, 60);
+    if (!getenv("MESH") || strcmp(getenv("MESH"), "default")) projectm_set_mesh_size(pm, 96, 72);
+    projectm_set_fps(pm, FPS);
     projectm_set_preset_locked(pm, true);
     projectm_set_soft_cut_duration(pm, 0.0);
     projectm_set_preset_duration(pm, 100000.0);
     projectm_load_preset_file(pm, argv[1], false);
     if (failed) return 2;
 
-    const int SR = 44100, PER = SR / 60;
-    float *buf = malloc(sizeof(float) * PER * 2);
-    unsigned char *px = malloc(W * H * 3), *row = malloc(W * 3);
-    long t = 0; unsigned rng = 1;
-    double beat = 60.0 / 128.0;
+    const int CAP = SR / FPS * 4 + 4096;
+    float *buf = malloc(sizeof(float) * CAP * 2);
+    unsigned char *px = malloc(W * H * 3);
+    long pos = 0;  // stereo frames delivered so far
     double t0 = now();
     for (int f = 0; f < N; f++) {
         trace_draw = getenv("TRACEDRAW") && f == N - 1;
-        { double target = t0 + f / 60.0, d; while ((d = target - now()) > 0) { struct timespec sl = {0, (long)(d * 1e9)}; nanosleep(&sl, 0); } }
-        for (int i = 0; i < PER; i++, t++) {
-            double ts = (double)t / SR, bp = fmod(ts, beat), hp = fmod(ts + beat / 2, beat);
-            double bar = fmod(ts, beat * 16);
-            double kick = sin(2 * M_PI * (50 + 120 * exp(-bp * 30)) * bp) * exp(-bp * 8);
-            rng = rng * 1103515245 + 12345;
-            double hat = ((rng >> 16) / 32768.0 - 1) * exp(-hp * 40) * 0.3;
-            double root = bar < beat * 8 ? 110 : 98;
-            double pad = 0.15 * (sin(2 * M_PI * root * ts) + sin(2 * M_PI * root * 1.5 * ts) +
-                                 sin(2 * M_PI * root * 2.52 * ts) * (0.5 + 0.5 * sin(ts * 0.7)));
-            double lead = 0.12 * sin(2 * M_PI * root * 4 * (1 + 0.25 * (((int)(ts / beat * 2)) % 4 == 3)) * ts)
-                          * exp(-fmod(ts, beat / 2) * 6);
-            double v = 0.6 * kick + hat + pad + lead;
-            buf[i * 2] = (float)(v + 0.05 * sin(ts * 3)); buf[i * 2 + 1] = (float)v;
+        { double target = t0 + (double)f / FPS, dl; while ((dl = target - now()) > 0) { struct timespec sl = {0, (long)(dl * 1e9)}; nanosleep(&sl, 0); } }
+        if (ff) fprintf(ff, "%d %.4f\n", f, now() - t0);
+        long end = (long)((f + 1) * (double)SR / FPS);
+        long cnt = end - pos;
+        long fstart = pos;
+        if (!strcmp(feed, "aulos_old") && cnt > 240) { fstart = end - 240; cnt = 240; }
+        else if (!strcmp(feed, "last576") && cnt > 576) { fstart = end - 576; cnt = 576; }
+        pos = end;
+        while (cnt > 0) {
+            int k = cnt > CAP ? CAP : (int)cnt;
+            if (audio) {
+                for (int i = 0; i < k; i++) {
+                    long idx = a_off + fstart + i;
+                    if (idx < audio_frames) { buf[i * 2] = audio[idx * 2]; buf[i * 2 + 1] = audio[idx * 2 + 1]; }
+                    else buf[i * 2] = buf[i * 2 + 1] = 0;
+                }
+            } else synth(buf, fstart, k);
+            if (gain != 1.0) for (int i = 0; i < k * 2; i++) buf[i] *= (float)gain;
+            projectm_pcm_add_float(pm, buf, k, PROJECTM_STEREO);
+            fstart += k; cnt -= k;
         }
-        projectm_pcm_add_float(pm, buf, PER, PROJECTM_STEREO);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, W, H);
         glClear(GL_COLOR_BUFFER_BIT);

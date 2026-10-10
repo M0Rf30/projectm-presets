@@ -72,15 +72,15 @@ b1x=1.000000
 b2x=1.000000
 b3x=1.000000
 b1ed=0.250000
-per_frame_init_1=sg=0; ph=0; ts=20; tr=0; md=0.5; bm=0; tm=0;
-per_frame_1=dt = 1/max(fps,15);
-per_frame_2=tg = min(max(bass/max(bass_att,0.2) - 1.0, 0)*2.5, 1);
-per_frame_3=sg = sg + (tg-sg)*if(above(tg,sg),0.3,0.035);
+per_frame_init_1=sg=0; ph=0; ts=20; tr=0; md=0.5; bm=1; bd=0.3; tm2=1; td2=0.3; tl=0;
+per_frame_1=dt = min(max(time-tl,0.004),0.1); tl = time; bm = bm + (bass-bm)*(1-exp(-dt/0.8)); bd = bd + (abs(bass-bm)-bd)*(1-exp(-dt/2.5));
+per_frame_2=tg = min(max(((bass-bm)/max(bd,0.1) - 0.8)/1.5, 0), 1);
+per_frame_3=sg = sg + (tg-sg)*if(above(tg,sg), 1-pow(0.7,60*dt), 1-pow(0.965,60*dt));
 per_frame_4=ph = ph + dt*(0.4+2.5*sg);
 per_frame_5=ts = ts + dt*(1+0.5*sg);
-per_frame_6=ttg = min(max(treb/max(treb_att,0.2) - 1.0, 0)*2.5, 1);
-per_frame_7=tr = tr + (ttg-tr)*if(above(ttg,tr),0.4,0.08);
-per_frame_8=md = md + (mid_att-md)*0.02;
+per_frame_6=tm2 = tm2 + (treb-tm2)*(1-exp(-dt/0.8)); td2 = td2 + (abs(treb-tm2)-td2)*(1-exp(-dt/2.5)); ttg = min(max(((treb-tm2)/max(td2,0.15) - 0.8)/1.5, 0), 1);
+per_frame_7=tr = tr + (ttg-tr)*if(above(ttg,tr), 1-pow(0.6,60*dt), 1-pow(0.92,60*dt));
+per_frame_8=md = md + (mid_att-md)*(1-pow(0.98,60*dt));
 per_frame_9=q1 = sg;
 per_frame_10=q2 = ph;
 per_frame_11=q3 = tr;

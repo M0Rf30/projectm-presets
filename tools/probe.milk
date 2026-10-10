@@ -1,0 +1,33 @@
+[preset00]
+MILKDROP_PRESET_VERSION=201
+PSVERSION=2
+PSVERSION_WARP=2
+PSVERSION_COMP=2
+fRating=1.000000
+fDecay=1.000000
+fGammaAdj=1.000000
+nWaveMode=0
+fWaveAlpha=0.000000
+bTexWrap=0
+zoom=1.000000
+cx=0.500000
+cy=0.500000
+sx=1.000000
+sy=1.000000
+per_frame_1=q1 = bass; q2 = bass_att; q3 = mid; q4 = mid_att;
+per_frame_2=q5 = treb; q6 = treb_att; q7 = vol; q8 = fps;
+comp_1=`shader_body
+comp_2=`{
+comp_3=`  float v = q1;
+comp_4=`  float i = floor(uv.x*8.0);
+comp_5=`  if (i > 0.5) v = q2;
+comp_6=`  if (i > 1.5) v = q3;
+comp_7=`  if (i > 2.5) v = q4;
+comp_8=`  if (i > 3.5) v = q5;
+comp_9=`  if (i > 4.5) v = q6;
+comp_10=`  if (i > 5.5) v = q7;
+comp_11=`  if (i > 6.5) v = q8;
+comp_12=`  v = clamp(v, 0.0, 31.99);
+comp_13=`  float fl = floor(v);
+comp_14=`  ret = float3(fl/32.0, v - fl, 0.0);
+comp_15=`}
