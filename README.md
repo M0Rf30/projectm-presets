@@ -12,6 +12,21 @@ They use per-frame equations, custom waves and shapes, and warp and comp pixel s
 | **Bioluminescent Abyss**: glowing jellyfish, cell-like patterns and plankton in deep water. | ![](previews/bioluminescent-abyss.png) |
 | **Neon Sacred Geometry**: a flower-of-life mandala over a synthwave grid. It snaps 30° on each beat. | ![](previews/neon-sacred-geometry.png) |
 
+## Double presets (`.milk2`)
+
+`milk2/` holds MilkDrop 3 double presets. Each file is two complete presets drawn at the same time and stitched together by a frozen MilkDrop 3 blend pattern, so the picture is half one scene and half another, joined by the pattern's seam. They need a MilkDrop 3 compatible player such as [lactea](https://github.com/M0Rf30/lactea) (`--compat milkdrop3`, or `auto`, which detects them). Plain projectM does not load `.milk2`. They also use MilkDrop 3's `get_fft()` spectrum lookup in their shaders.
+
+| | |
+|---|---|
+| **Event Horizon** (`snail`): a raymarched Schwarzschild black hole with a lensed accretion disc, Doppler beaming and a photon ring, against a cold supernova nebula. Each kick drops a hotspot into the disc. | ![](previews/event-horizon.png) |
+| **Fractal Sanctum** (`snail`): a morphing Julia set with orbit-trap stained-glass colouring, against a Kali-set nebula flythrough. | ![](previews/fractal-sanctum.png) |
+| **Crystal Cathedral** (`cercle`): a stained-glass rose window whose cells pulse with the spectrum, in the middle of an ice-crystal cavern. | ![](previews/crystal-cathedral.png) |
+| **Liquid Silk** (`wave`): iridescent oil-slick silk, torn open by gold and crimson ink advected along curl noise. | ![](previews/liquid-silk.png) |
+| **Hyperspace** (`cercle`): a warp-drive starfield with a wandering, kick-whipped camera, inside an ember wormhole whose rings follow the spectrum. | ![](previews/hyperspace.png) |
+| **Cymatic Prism** (`square`): a Chladni plate where glowing sand settles on the nodal lines, next to a prism splitting a beam into a spectrum-driven rainbow. | ![](previews/cymatic-prism.png) |
+
+The sources are in `milk2/src/<name>/`: `a.milk` and `b.milk` (two ordinary presets, each also runnable alone) and `milk2.json` (pattern, progress, direction and the five random values). `make milk2` rebuilds all the `.milk2` files from them with `tools/mkmilk2.py`.
+
 ## Install
 
 Arch Linux (AUR): `projectm-presets-m0rf30-git`
@@ -22,7 +37,7 @@ Manual install:
 sudo make install            # → /usr/share/projectM/presets/m0rf30
 ```
 
-You can also copy `presets/*.milk` into your own projectM or MilkDrop presets folder.
+You can also copy `presets/*.milk` into your own projectM or MilkDrop presets folder, and `milk2/*.milk2` into a MilkDrop 3 / lactea one. `make install` installs both; projectM ignores `.milk2`.
 
 ## Development tools
 
@@ -36,6 +51,12 @@ FRAMES=600 tools/preview.sh presets/X.milk   # 10 s mp4 + 3×3 contact sheet in 
 
 When an HLSL shader fails to compile, projectM gives no error and quietly uses its default shader instead. `validate.py` detects this by adding a test colour to each shader and checking that it appears in the rendered output.
 The renderer runs in real time because projectM 4.1 times its animation by the wall clock.
+
+`tools/shot.sh` renders a `.milk` or `.milk2` in lactea (MilkDrop 3 mode, deterministic 60 fps clock, a synthetic 128 bpm track from `tools/synth.py`) and saves screenshots at the frames you give it. It prints lactea's `WARN` line when a shader fails to compile, and runs one lactea at a time (the lactea window must be visible, or the compositor stalls it):
+
+```sh
+tools/shot.sh milk2/src/hyperspace/a.milk /tmp/shots 240 600 1200
+```
 
 `tools/render` can also play real audio and mimic a particular frontend. All options are environment variables:
 

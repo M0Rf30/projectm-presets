@@ -1,0 +1,15 @@
+{
+ "title": "Cymatic Prism",
+ "name1": "Cymatic Prism A - Chladni Sanctum",
+ "name2": "Cymatic Prism B - Spectral Prism",
+ "pattern": "square",
+ "progress": 0.6,
+ "direction": 1,
+ "random": [
+  0.5,
+  0.5,
+  0.5,
+  0.5,
+  0.5
+ ]
+}

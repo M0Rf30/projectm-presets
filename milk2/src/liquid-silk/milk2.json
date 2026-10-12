@@ -1,0 +1,15 @@
+{
+ "title": "Liquid Silk",
+ "name1": "Liquid Silk A - Iridescent Silk",
+ "name2": "Liquid Silk B - Molten Ink",
+ "pattern": "wave",
+ "progress": 0.5,
+ "direction": 1,
+ "random": [
+  0.3,
+  0.6,
+  0.5,
+  0.7,
+  0.4
+ ]
+}
